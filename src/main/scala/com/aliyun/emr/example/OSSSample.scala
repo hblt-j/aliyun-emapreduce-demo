@@ -32,6 +32,8 @@ object OSSSample extends RunLocally {
         """.stripMargin)
       System.exit(1)
     }
+    val hadoopConf = sc.hadoopConfiguration
+    hadoopConf.set("io.compression.codec.snappy.native","true")
 
     val inputPath = args(0)
     val numPartitions = args(1).toInt
