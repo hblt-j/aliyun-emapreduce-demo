@@ -6,9 +6,9 @@
 
     <groupId>com.bigdata.lzlh</groupId>
     <artifactId>pv</artifactId>
-    <version>1.1</version>
+    <version>1.2.1</version>
     <packaging>jar</packaging>
-    <name>pv hour job</name>
+    <name>mobi job 1h</name>
 
     <properties>
         <scala.version>2.10.5</scala.version>
@@ -113,11 +113,11 @@
             <version>${emr.version}</version>
         </dependency>
 
-       <!-- <dependency>
+       <dependency>
             <groupId>com.aliyun.emr</groupId>
             <artifactId>emr-logservice_2.10</artifactId>
             <version>1.4.0-SNAPSHOT</version>
-        </dependency>-->
+        </dependency>
         <dependency>
             <groupId>com.aliyun.oss</groupId>
             <artifactId>aliyun-sdk-oss</artifactId>
