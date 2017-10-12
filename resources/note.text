@@ -1,43 +1,58 @@
 ###交互die
 service emr-agent restart
 ps -axu|grep  RemoteInterpreterServer
+
 #zeppelin die
 /usr/lib/zeppelin-current/bin/zeppelin-daemon.sh restart
+
 #连远端Mongo
 D:\Program Files (x86)\mongodb\bin>mongo.exe 47.93.56.72:37177 -uroot -pmongo2tiger --authenticationDatabase admin
+
 #服务器mongo数据导出
 mongodump --host dds-2ze629d32df5dd941.mongodb.rds.aliyuncs.com:3717 --authenticationDatabase admin -d lzlh -o ./mongobak/ -u root -p mongo2tiger
 tar cvf ./mongobak/lzlh.zip ./mongobak/lzlh
 sz
+
 #本地mongo启动脚本
 d:
 cd D:\Program Files (x86)\mongodb\bin\
 mongod.exe --dbpath ..\data\db
+
 #本地mongo数据导入
-D:\Program Files (x86)\mongodb>bin\mongorestore.exe -d lzlh d:\downloads\lzlh
+D:\Program Files (x86)\mongodb>bin\mongorestore.exe -d lzlh D:\downloads\lzlh\mongobak\lzlh
 #mongo数据清理
-db.getCollection('DayLevelDevicesIndicators').remove({"date" : {$gt:ISODate("2017-06-12T16:00:00.000Z")}})
-db.getCollection('DayLevelFirstPageIndicators').remove({"date" : {$gt:ISODate("2017-06-12T16:00:00.000Z")}})
-db.getCollection('DayLevelIndicators').remove({"date" : {$gt:ISODate("2017-06-12T16:00:00.000Z")}})
-db.getCollection('DayLevelLastPageIndicators').remove({"date" : {$gt:ISODate("2017-06-12T16:00:00.000Z")}})
-db.getCollection('DayLevelNewOldVisitors').remove({"date" : {$gt:ISODate("2017-06-12T16:00:00.000Z")}})
-db.getCollection('DayLevelNewOldVisitorsIndicators').remove({"date" : {$gt:ISODate("2017-06-12T16:00:00.000Z")}})
-db.getCollection('DayLevelPageIndicators').remove({"date" : {$gt:ISODate("2017-06-12T16:00:00.000Z")}})
-db.getCollection('DayLevelRegionIndicators').remove({"date" : {$gt:ISODate("2017-06-12T16:00:00.000Z")}})
-db.getCollection('DayLevelSourceIndicators').remove({"date" : {$gt:ISODate("2017-06-12T16:00:00.000Z")}})
-db.getCollection('HourLevelIndicators').remove({"date" : {$gt:ISODate("2017-06-12T16:00:00.000Z")}})
-db.getCollection('PVLongIndicators').remove({"date" : {$gt:ISODate("2017-06-12T16:00:00.000Z")}})
-db.getCollection('trackpageview').remove({"st" : {$gt:ISODate("2017-06-12T16:00:00.000Z")}})
+db.getCollection('DayLevelDevicesIndicators').remove({"date" : {$gte:ISODate("2017-06-26T16:00:00.000Z")}})
+db.getCollection('DayLevelFirstPageIndicators').remove({"date" : {$gte:ISODate("2017-06-26T16:00:00.000Z")}})
+db.getCollection('DayLevelIndicators').remove({"date" : {$gte:ISODate("2017-06-26T16:00:00.000Z")}})
+db.getCollection('DayLevelLastPageIndicators').remove({"date" : {$gte:ISODate("2017-06-26T16:00:00.000Z")}})
+db.getCollection('DayLevelNewOldVisitors').remove({"date" : {$gte:ISODate("2017-06-26T16:00:00.000Z")}})
+db.getCollection('DayLevelNewOldVisitorsIndicators').remove({"date" : {$gte:ISODate("2017-06-26T16:00:00.000Z")}})
+db.getCollection('DayLevelPageIndicators').remove({"date" : {$gte:ISODate("2017-06-26T16:00:00.000Z")}})
+db.getCollection('DayLevelRegionIndicators').remove({"date" : {$gte:ISODate("2017-06-26T16:00:00.000Z")}})
+db.getCollection('DayLevelSourceIndicators').remove({"date" : {$gte:ISODate("2017-06-26T16:00:00.000Z")}})
+db.getCollection('HourLevelIndicators').remove({"date" : {$gte:ISODate("2017-06-26T16:00:00.000Z")}})
+db.getCollection('PVLongIndicators').remove({"date" : {$gte:ISODate("2017-06-26T16:00:00.000Z")}})
+db.getCollection('trackpageview').remove({"st" : {$gte:ISODate("2017-06-26T16:00:00.000Z")}})
+
 ###emr acount
 47.93.56.72 root/tigerBigData123!@#
 #47.93.36.43 root tigerDT123!@#
 
+#erm mysql :root EMRroot1234
+#pv-m sparksubmit --class com.bigdata.lzlh.pv_m --master yarn-client --driver-memory 1g --executor-memory 1g --num-executors 2 --executor-cores 4 --conf spark.shuffle.file.buffer=32 --conf spark.shuffle.memoryFraction=0.3 --conf spark.yarn.executor.memoryOverhead=1024 --conf spark.sql.codegen=true --conf spark.sql.autoBroadcastJoinThreshold=104857600 --conf spark.sql.shuffle.partitions=20 --conf spark.executor.extraJavaOptions="-XX:MaxPermSize=32m -XX:-UseGCOverheadLimit -XX:+CMSClassUnloadingEnabled -XX:MaxDirectMemorySize=536m -Xmn100m -XX:MaxTenuringThreshold=1 -XX:+UseConcMarkSweepGC -XX:+CMSParallelRemarkEnabled -XX:+UseCMSCompactAtFullCollection -XX:+UseCMSInitiatingOccupancyOnly -XX:CMSInitiatingOccupancyFraction=10 -XX:+UseCompressedOops" ossref://tt-big-data/test/pv-m-1.2.0.jar tracklog logstash-json-store test cn-beijing-vpc.log.aliyuncs.com LTAIanYcMuGu2D3x Nvqs7Fc82ygzAyv9BIVRpDK84nkMLv 55
+
+###dataAccount
 # r-2ze9249bfd33e674.redis.rds.aliyuncs.com	端口号（port）： 6379 密码：tigerReData1
-tigerhuan：rdsbm2yizfrqmiro.mysql.rds.aliyuncs.com chzbjscyq2014twotigercom.mysql.rds.aliyuncs.com只读，密码：tigerBDData!@# 帐号：bigdata 数据库：tigerhuan
-mongodb://root:mongo2tiger@dds-2ze629d32df5dd941.mongodb.rds.aliyuncs.com:3717,dds-2ze629d32df5dd942.mongodb.rds.aliyuncs.com:3717/admin?replicaSet=mgset-3165605
-mongo 外网 47.93.56.72:37177
+#tigerhuan：rdsbm2yizfrqmiro.mysql.rds.aliyuncs.com chzbjscyq2014twotigercom.mysql.rds.aliyuncs.com只读，密码：tigerBDData!@# 帐号：bigdata 数据库：tigerhuan
+#mongodb://root:mongo2tiger@dds-2ze629d32df5dd941.mongodb.rds.aliyuncs.com:3717,dds-2ze629d32df5dd942.mongodb.rds.aliyuncs.com:3717/admin?replicaSet=mgset-3165605
+#mongo 外网 47.93.56.72:37177
 
-两只老虎阿里云账户 用户登录链接http://signin.aliyun.com/twotiger/login.htm 密码：tigerBDData!@#123 帐号：bigData
+#OTS链接：
+ots.endpoint=http://dds.cn-beijing.ots.aliyuncs.com 
+ots.accessKeyId=vQmXS2FFEP6gSQ5D
+ots.accessKeySecret=6Qo2JCrmm2UlIrP81skabkDFoHsaNA
+ots.instanceName=event-message
+
+###aliyun
+#两只老虎阿里云账户 用户登录链接http://signin.aliyun.com/twotiger/login.htm 密码：tigerBDData!@#123 帐号：bigData
 #RAM用户登录链接http://signin.aliyun.com/woneng/login.htm bigdata tigerBDData
-
-erm mysql :root EMRroot1234
