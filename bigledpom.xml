@@ -84,6 +84,11 @@
             <artifactId>spark-streaming-kafka_2.10</artifactId>
             <version>${spark.version}</version>
         </dependency>
+        <!--<dependency>-->
+            <!--<groupId>org.apache.kafka</groupId>-->
+            <!--<artifactId>kafka_2.10</artifactId>-->
+            <!--<version>0.8.2.1</version>-->
+        <!--</dependency>-->
         <dependency>
             <groupId>com.alibaba</groupId>
             <artifactId>fastjson</artifactId>
@@ -213,6 +218,7 @@
                     <outputFile>${project.build.directory}/shaded/${project.name}-${project.version}-shaded.jar</outputFile>
                     <artifactSet>
                         <includes>
+                            <!--<inclde>org.apache.kafka:kafka_2.10</inclde>-->
                             <include>com.alibaba:fastjson</include>
                             <include>org.jdom:jdom</include>
                             <include>mysql:mysql-connector-java</include>
