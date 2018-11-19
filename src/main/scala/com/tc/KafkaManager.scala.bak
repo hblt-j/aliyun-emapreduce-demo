@@ -1,0 +1,184 @@
+package org.apache.spark.streaming.kafka
+
+import java.util.concurrent.atomic.AtomicReference
+
+import common.GlobalConstants
+import kafka.common.TopicAndPartition
+import kafka.message.MessageAndMetadata
+import kafka.serializer.Decoder
+import org.apache.spark.SparkException
+import org.apache.spark.streaming.StreamingContext
+import org.apache.spark.streaming.kafka.{HasOffsetRanges, KafkaCluster, KafkaUtils, OffsetRange}
+import org.apache.spark.streaming.kafka.KafkaCluster.{Err, LeaderOffset}
+
+import scala.collection.mutable
+import scala.reflect.ClassTag
+
+/**
+  * Created by Administrator on 2017/7/31.
+  * 1.创建输入的dstream
+  * 2.更新过时的消费者偏移量
+  * 3.获取每个分区的消费偏移量
+  * 4.定时更新每个分区的消费偏移量到zk上。
+  */
+class KafkaManager (var kafkaParams: Map[String, String], var topicSet: Set[String])extends Serializable{
+  val groupId = if (kafkaParams.contains("group.id")) kafkaParams("group.id") else throw new SparkException("No consumer groups.id")
+  //创建kafka集群客户端
+  val kafkaCluster = new KafkaCluster(kafkaParams)
+  setOrUpdateOffsetToZK
+
+  /**
+    * streaming程序启动立马要去set或者更新消费偏移量的启示位置
+    *
+    *
+    *
+    */
+  def setOrUpdateOffsetToZK() ={
+    //定义一个标记，检查是否获得到了偏移量
+    var hasCousumed=true
+    //尝试获取topic每个分区数.(读回来可能有，可能没有)
+    val errOrPartitions: Either[Err, Set[TopicAndPartition]]= kafkaCluster.getPartitions(topicSet)
+    //判断是否读取到了分区
+    if(errOrPartitions.isLeft) throw new SparkException("The partition is not found")
+    //获取分区数.这里获取的是分区数。
+    val partitions=errOrPartitions.right.get
+    /**
+      * 接下来有两种情况，一个是获得了偏移量，一个是没有获得偏移量。如果没设置就设置成用户指定位置，或者最新位置
+      * 获得偏移量也有两种，一种是过期了，另一种是没过期。过期的话就设置该分区的最早的位置，没过期的话，就设定这个位置
+      */
+    //尝试获取每个分区的偏移量
+    val errOrAndPartitionToLong= kafkaCluster.getConsumerOffsets(groupId,partitions)
+    //判断是否获得了偏移量
+    if(errOrAndPartitionToLong.isLeft)hasCousumed=false
+    //判断标记来知道是否获得到了分区的offset值
+
+    //用来存放过时的分区消费偏移量
+    val offsets = new mutable.HashMap[TopicAndPartition, Long]()
+
+    if(hasCousumed){
+      //消费过并获取到了
+      //获取到每个分区的偏移量
+      //获取出来的值是Map（partition,Long）
+      val consumerPartitionToLong=errOrAndPartitionToLong.right.get
+      //尝试获取topic每个分区最早的offset值，来检查现在的消费值是否过期了
+      val errOrAndPartitionToOffset=kafkaCluster.getEarliestLeaderOffsets(partitions)
+      //判断是否有值
+      if(errOrAndPartitionToOffset.isLeft) new SparkException("Failed to get the partition offset")
+      //获取到每个分区最早的值earliest
+      val earliestLeaderPartitionToOffset= errOrAndPartitionToOffset.right.get
+      //遍历每个分区的偏移量 ，如果比最早的偏移量还小 那就说明 该分区有部分数据已经过时了，被kafka定时清理策略删除了
+      consumerPartitionToLong.foreach(t2=>{
+        //t2 即某个分区的消费偏移量（TopicAndPartition, Long）
+        //获取该分区最早的偏移量
+        //获取来的value要.offset 才能获取到值
+        val earliest=earliestLeaderPartitionToOffset(t2._1).offset
+        //判断该偏移量是否过时
+        if(t2._2<earliest){
+          offsets.put(t2._1,earliest)
+        }
+        //如果都相等则不用设置 ，会自动在该offset中读取
+      })
+    }else{
+      var partitionToLeaderOffset: Map[TopicAndPartition, LeaderOffset] = null
+      //没有获取到该topic的offset值 就从用户定义的获取
+      //没有消费过，用户手动指定消费偏移量或者从最大的位置开始消费
+      val reset = kafkaParams.get(GlobalConstants.KAFKA_OFFSET_RESET)
+      if(reset==Some("smallest")){
+        //尝试获取每个分区的最早的offset值
+        val earliestLeaderOffsets=kafkaCluster.getEarliestLeaderOffsets(partitions)
+        //判断是否获取到了值 ，没获取到就要抛异常了。获取偏移量失败
+        if(earliestLeaderOffsets.isLeft)new SparkException("Failed to get the partition offset")
+        //获取到最早偏移量
+        partitionToLeaderOffset=earliestLeaderOffsets.right.get
+      }else{
+        //用户没有指定消费位置，默认从最后开始消费
+        //尝试获取每个分区的最大消息偏移量
+        val latestLeaderOffsets=kafkaCluster.getLatestLeaderOffsets(partitions)
+        if(latestLeaderOffsets.isLeft)new SparkException("Failed to get the partition offset")
+        partitionToLeaderOffset=latestLeaderOffsets.right.get
+
+      }
+      //将信息加入到需要跟新的偏移量map中
+      partitionToLeaderOffset.foreach(t2=>offsets.put(t2._1,t2._2.offset))
+
+    }
+    //将重置过的消费偏移量更新到zk上去
+    kafkaCluster.setConsumerOffsets(groupId,offsets.toMap)
+  }
+
+  /**
+    * 打印每个分区 的开始消费位置
+    */
+  def printZKOffset(consumerPartitionOffsets: Map[TopicAndPartition, Long])={
+    println("====================================================")
+    consumerPartitionOffsets.foreach(t2 => {
+      println(s"topic:${t2._1.topic},partition:${t2._1.partition},beginOffset:${t2._2}")
+    })
+    println("====================================================")
+  }
+
+  /**
+    *
+    *获取每个分区的初始消费位置
+    */
+  def getConsumerOffsets():Map[TopicAndPartition,Long]={
+    val consumerPartitionOffsets=new mutable.HashMap[TopicAndPartition,Long]()
+    //尝试获取topic的每个分区
+    val partitions=kafkaCluster.getPartitions(topicSet)
+    //获取分区失败
+    if(partitions.isLeft)new SparkException("The specified partition was not found")
+    val topicAndPartitions=partitions.right.get
+    //尝试获取每个分区的消费位置
+    val offset=kafkaCluster.getConsumerOffsets(groupId,topicAndPartitions)
+    if(offset.isLeft){
+      topicAndPartitions.foreach(topicSet=>{
+        consumerPartitionOffsets.put(topicSet,0L)
+      })
+    } else {
+      offset.right.get.foreach(t2=>consumerPartitionOffsets.put(t2._1,t2._2))
+    }
+    consumerPartitionOffsets.toMap
+  }
+
+  /**
+    * 创建输入的Dstreaming
+    */
+  val offsets = new AtomicReference[Array[OffsetRange]]()
+  def createDirectStream[
+  K: ClassTag,
+  V: ClassTag,
+  KD <: Decoder[K] : ClassTag,
+  VD <: Decoder[V] : ClassTag](ssc: StreamingContext) = {
+    KafkaUtils.createDirectStream[K, V, KD, VD, V](ssc, kafkaParams, getConsumerOffsets, (messageHandler: MessageAndMetadata[K, V]) => {
+      messageHandler.message()
+    }).transform(rdd=>{
+      //记录当前rdd消费的偏移量，以便及时更新到zk上
+      val offsetRange=rdd.asInstanceOf[HasOffsetRanges].offsetRanges
+      offsets.set(offsetRange)
+      rdd
+    })
+
+  }
+
+  /**
+    * 更新offset到zk上
+    */
+  def updateOffsetToZK()={
+    println("================开始更新offset到zk上================================")
+    val consumerPartitionOffsets = new mutable.HashMap[TopicAndPartition, Long]()
+    for(offset<-offsets.get()){
+      println(s"update offset to zk  topic:${offset.topic},partition:${offset.partition},untilOffset:${offset.untilOffset}")
+      consumerPartitionOffsets.put(offset.topicAndPartition(),offset.untilOffset)
+
+    }
+    //将当前消费的offset更新到zk上
+    val offsets1 = kafkaCluster.setConsumerOffsets(groupId, consumerPartitionOffsets.toMap)
+    if(offsets1.isLeft){
+      throw new SparkException("Failed to update offset to ZK")
+    }
+    println("======================================================================")
+  }
+
+}
+
+
