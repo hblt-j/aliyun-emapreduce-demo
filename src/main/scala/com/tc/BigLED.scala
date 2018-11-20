@@ -76,7 +76,7 @@ object BigLED {
       Map[String, String](
         "metadata.broker.list" ->brokers,
         "group.id"->group,
-        "session.timeout.ms"->"30000",
+        //"session.timeout.ms"->"30000",
         "fetch.message.max.bytes" -> "20971520",
         "auto.offset.reset" -> "smallest"
       )
@@ -94,6 +94,8 @@ object BigLED {
     readMakeDeal(sqlContext,mongohost,credentials)
     readApplyCount(sqlContext)
     lines.foreachRDD(rdd => {
+      //rdd.foreachPartition { partitionOfRecords =>//sqlContext java.lang.NullPointerException :at org.apache.spark.sql.SQLConf.getConf(SQLConf.scala:647)
+      //partitionOfRecords.foreach{record =>{
       import sqlContext.implicits._
       val df = sqlContext.read.json(rdd) //rdd.toDF
       //      System.err.println("=========>rdd:"+rdd.collect.mkString)
@@ -143,7 +145,7 @@ object BigLED {
           """.stripMargin)
         da2.write.format("com.stratio.datasource.mongodb").mode(SaveMode.Overwrite).options(opt1).save()
         System.err.println("=========>bigLedCityBrandTop.count:" + da2.count())
-      }
+      }//}}}
     })
     //参数优化参考，目前只有一个topic一个pation顾都不需要
     //val kafkaParams: Map[String, String] = Map("group.id" -> group)
