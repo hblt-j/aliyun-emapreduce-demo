@@ -91,12 +91,12 @@ object BigLED {
     val lines = dstreams.map(_._2).repartition(1)
     //System.err.println("=========>lines:"+lines.count()+"|"+lines.toString)
     //    lines.saveAsTextFiles("hdfs:///root/lines")
-    readMakeDeal(sqlContext,mongohost,credentials)
-    readApplyCount(sqlContext)
+    updateOffLineData(sqlContext,checkpointDirectory,mongohost,credentials)//非Dstream操作不会流上频次执行
     lines.foreachRDD(rdd => {
       //rdd.foreachPartition { partitionOfRecords =>//sqlContext java.lang.NullPointerException :at org.apache.spark.sql.SQLConf.getConf(SQLConf.scala:647)
       //partitionOfRecords.foreach{record =>{
       import sqlContext.implicits._
+      updateOffLineData(sqlContext,checkpointDirectory,mongohost,credentials)
       val df = sqlContext.read.json(rdd) //rdd.toDF
       //      System.err.println("=========>rdd:"+rdd.collect.mkString)
       System.err.println("=========>df.count:" + df.count())
@@ -163,6 +163,32 @@ object BigLED {
     ssc.checkpoint(checkpointDirectory) // set checkpoint directory，driver容错
     ssc
   }
+  def updateOffLineData(sqlContext:HiveContext,checkpointDirectory:String, mongohost:String, credentials:String){
+    import sqlContext.implicits._
+    import org.apache.hadoop.conf.Configuration
+    import org.apache.hadoop.fs.{FileSystem, Path}
+    val path=checkpointDirectory+"/refrash.parquet"
+    val f: FileSystem = FileSystem.get(new Configuration)
+    if(!f.exists(new Path(path))){
+      //离线场次相关数据首次启动执行一次以后每天一刷
+      readMakeDeal(sqlContext,mongohost,credentials)
+      readApplyCount(sqlContext)
+      //刷新flag
+      val data=sqlContext.sql("select current_date")
+      data.toDF.write.mode(SaveMode.Overwrite).parquet(path)
+    }else{
+      val olddata=sqlContext.read.parquet(path)
+      val data=sqlContext.sql("select current_date")
+      if(data.collect()(0)(0).toString != olddata.collect()(0)(0).toString) {
+        //离线场次相关数据每天一刷
+        readMakeDeal(sqlContext,mongohost,credentials)
+        readApplyCount(sqlContext)
+        //刷新flag
+        data.toDF.write.mode(SaveMode.Overwrite).parquet(path)
+      }
+    }
+  }
+  
   def readMakeDeal(sqlContext:HiveContext, mongohost:String, credentials:String){
     import com.stratio.datasource.mongodb._
     import com.stratio.datasource.mongodb.config._
